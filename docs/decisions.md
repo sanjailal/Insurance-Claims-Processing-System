@@ -1,0 +1,195 @@
+# Decisions & Trade-offs
+
+This document captures design decisions made during planning and implementation — what was built, what wasn't, the assumptions made, and the reasoning behind each choice.
+
+---
+
+## What We're Building
+
+An insurance claims processing system that:
+- Accepts claim submissions with line items from members
+- Adjudicates each line item against coverage rules
+- Tracks claims and line items through their lifecycle states
+- Produces explanations for every coverage decision
+- Allows members to dispute decisions
+
+---
+
+## Scope Boundaries
+
+### In Scope
+- Individual policy only
+- Claim submission with one or more line items
+- Adjudication of each line item against coverage rules (service type coverage, annual limits, shared deductible)
+- Claim and line item lifecycle state management
+- Denial explanations with human-readable text
+- Member dispute flow with manual insurer override
+
+### Explicitly Out of Scope
+
+| Excluded | Reason |
+|---|---|
+| Group / family floater policies | Out of assignment scope; system is designed to extend to these in future |
+| Authentication, login, user registration | Not part of claims processing; assignment explicitly excludes it |
+| Policy enrollment / purchase flows | Adjacent concern, not evaluated |
+| Email notifications, dashboards, analytics | Assignment explicitly excludes it |
+| Prior authorization | Adds significant complexity; not required for core adjudication |
+| Coordination of benefits (multiple insurers) | Member has exactly one active policy |
+| Network negotiation / customary charges | Billed amount treated as allowed amount; simplification documented |
+| Out-of-pocket maximum | Deductible + coverage percent is sufficient for the scope |
+| Admin panels, provider account management | Assignment explicitly excludes it |
+
+---
+
+## Domain Design Decisions
+
+### Policy Model — Individual Only
+
+**Decision:** Support only individual policies for now. A `policyType` field is included on the Policy entity as an extension point.
+
+**Why:** The assignment specifies individual plans. Group and floater policies would require shared benefit pools across members — a significant modeling change. The `policyType` field ensures the data model accommodates this without a breaking schema change later.
+
+**Rejected alternative:** Modeling group policy from the start — adds complexity without evaluation benefit.
+
+---
+
+### Coverage Rules — One Rule Per Service Type Per Policy
+
+**Decision:** Coverage is defined as a set of `CoverageRule` records attached to a policy. Each rule covers exactly one service type and specifies the annual limit and coverage percentage.
+
+**Why:** Normalized, configurable, and queryable. Each adjudication step looks up one rule by `(policyId, serviceType)`. Adding or modifying coverage for a service type is a data change, not a code change.
+
+**Rejected alternative:** Hard-coding coverage rules in application logic — would require code deployments to change coverage terms.
+
+---
+
+### Deductible — Shared Annual Pool
+
+**Decision:** The annual deductible is a single amount on the Policy, shared across all covered service types. Year-to-date deductible spend is tracked per member per policy year.
+
+**Why:** This is how real individual insurance policies work. A per-service-type deductible is unusual and would be less realistic to model.
+
+**Implication:** During adjudication, the deductible balance is checked and reduced before calculating the insurer's share. The deductible accumulates across all claims in a policy year and resets on the policy renewal date.
+
+**Rejected alternative:** Per-service-type deductible — simpler to implement but unrealistic and harder to explain in review.
+
+---
+
+### Cost-Sharing Model — Deductible + Coverage Percent Only
+
+**Decision:** The two cost-sharing levers are: (1) shared annual deductible, and (2) coverage percent (what % the insurer pays after the deductible is met).
+
+**Why:** Covers the core adjudication math without introducing copay/coinsurance distinctions, OOP maximum, or network tiers. Sufficient to demonstrate meaningful adjudication logic.
+
+**Rejected:** Copays, OOP maximum, coinsurance terminology — adds complexity without proportional evaluation value given the time constraint.
+
+---
+
+### Service Types — Strict Enum
+
+**Decision:** Service types are a fixed enum, not a free-text field.
+
+**Supported types:**
+- `PREVENTIVE_CARE`
+- `SPECIALIST_VISIT`
+- `EMERGENCY_CARE`
+- `INPATIENT_HOSPITAL`
+- `OUTPATIENT_PROCEDURE`
+- `DIAGNOSTIC_LAB`
+- `IMAGING`
+- `PHYSICAL_THERAPY`
+- `PRESCRIPTION_DRUGS`
+- `MENTAL_HEALTH`
+
+**Why:** A strict enum makes coverage rules exhaustive and testable. Unknown service types fail fast at the boundary rather than producing silent adjudication errors.
+
+**Rejected alternative:** Free-text service type — flexible but unvalidatable; coverage rule lookups would be fragile.
+
+---
+
+### Network / Customary Charges — Out of Scope
+
+**Decision:** Billed amount is treated as the allowed amount. No in-network / out-of-network distinction.
+
+**Why:** Network negotiation requires provider data and fee schedule logic. It does not affect the core adjudication model being evaluated. Explicitly documented so the simplification is visible.
+
+---
+
+## State Machine Decisions
+
+### Claim State Machine
+
+```
+SUBMITTED → UNDER_REVIEW → CLOSED ⇄ REOPENED
+```
+
+**SUBMITTED:** Claim has been received. No adjudication has run yet.
+
+**UNDER_REVIEW:** Adjudication is running or in progress.
+
+**CLOSED:** All line items have a final adjudication result. Terminal state until a dispute is filed.
+
+**REOPENED:** A member has filed a dispute on at least one line item. The claim re-enters review.
+
+**Transition rules:**
+- `SUBMITTED → UNDER_REVIEW`: Automatic on submission
+- `UNDER_REVIEW → CLOSED`: All line items adjudicated
+- `CLOSED → REOPENED`: Automatic when any line item dispute is filed
+- `REOPENED → UNDER_REVIEW`: Insurer begins dispute review
+- `UNDER_REVIEW → CLOSED`: All disputes resolved
+
+---
+
+### Line Item State Machine
+
+```
+PENDING → APPROVED
+        → DENIED
+             ↓ (either)
+          DISPUTED → UNDER_REVIEW → APPROVED
+                                  → DENIED
+```
+
+**PENDING:** Line item submitted, not yet adjudicated.
+
+**APPROVED:** Service type is covered by the policy; adjudication completed. `approvedAmount` may be less than `billedAmount` if the annual limit is partially exhausted.
+
+**DENIED:** Service type is not covered, or the member was not eligible, or the annual limit is fully exhausted.
+
+**DISPUTED:** Member has filed a dispute against this line item's decision.
+
+**UNDER_REVIEW:** Insurer is manually reviewing the dispute.
+
+**Key design decision — binary status:** Line item status is binary (`APPROVED` / `DENIED`). Whether the insurer pays the full billed amount or a lesser amount is captured in `approvedAmount` on the `AdjudicationResult`, not in the status. This avoids a third `PARTIALLY_APPROVED` state that would create dual sources of truth.
+
+**Key design decision — deductible and APPROVED:** If a covered line item is fully consumed by the annual deductible (insurer pays $0), the status is still `APPROVED`. `APPROVED` means the service type is covered by the policy. `DENIED` means it is not. The amounts explain the payment outcome.
+
+---
+
+### Dispute Resolution
+
+**Decision:** Disputes are resolved by manual insurer override. The insurer provides a decision (`APPROVED` or `DENIED`) and the line item is updated accordingly. No automatic re-adjudication.
+
+**Why:** Re-adjudication would produce the same result for rule-based denials. Disputes are inherently exceptions that require human judgment — the assignment confirms this.
+
+---
+
+## Claim Outcome — Computed, Not Stored
+
+**Decision:** There is no `PARTIALLY_APPROVED` status on a claim. The claim's payment outcome (fully covered, partially covered, fully denied) is derived from its line items at read time.
+
+**Why:** A stored `PARTIALLY_APPROVED` status would need to stay in sync with every line item state change — a consistency risk. The line items are the source of truth for outcomes. Helpers like `totalApproved()` and `totalDenied()` expose the summary without duplicating state.
+
+---
+
+## Assumptions
+
+1. A member has exactly one active policy at any time.
+2. The policy year resets on the `renewalDate` field of the policy. Deductible balances and annual limits reset annually.
+3. A claim's date of service is determined by its line items. Each line item records the date the service was rendered. Eligibility is checked per line item against the policy effective/expiry dates.
+4. The adjudication engine processes line items sequentially within a claim. Order does not affect outcome except in deductible application (which accumulates across line items in submission order).
+5. There is no fraud detection, duplicate claim detection, or prior authorization logic.
+
+---
+
+*This document will be updated as implementation decisions are made.*
