@@ -38,6 +38,8 @@ An insurance claims processing system that:
 | Network negotiation / customary charges | Billed amount treated as allowed amount; simplification documented |
 | Out-of-pocket maximum | Deductible + coverage percent is sufficient for the scope |
 | Admin panels, provider account management | Assignment explicitly excludes it |
+| PAID claim state | No payment disbursement use cases in scope; CLOSED is the terminal adjudication state |
+| Manual review queue (pre-decision) | No reviewer role exists; all adjudication is automatic; post-decision review handled via dispute flow |
 
 ---
 
@@ -179,6 +181,28 @@ PENDING → APPROVED
 **Decision:** There is no `PARTIALLY_APPROVED` status on a claim. The claim's payment outcome (fully covered, partially covered, fully denied) is derived from its line items at read time.
 
 **Why:** A stored `PARTIALLY_APPROVED` status would need to stay in sync with every line item state change — a consistency risk. The line items are the source of truth for outcomes. Helpers like `totalApproved()` and `totalDenied()` expose the summary without duplicating state.
+
+---
+
+### PHI Isolation — LineItemClinicalDetail
+
+**Decision:** Clinical fields (`diagnosisCode`, `providerName`, `description`) are stored in a separate `LineItemClinicalDetail` entity, not directly on `LineItem`.
+
+**Why:** The adjudication engine only needs `serviceType`, `billedAmount`, and `dateOfService` to make a coverage decision. It never needs clinical detail. Separating PHI into its own entity ensures the core engine is architecturally prevented from touching it. Clinical detail is joined in only at the API response layer for endpoints that explicitly require it (member's claim detail view, insurer dispute review).
+
+**In production this boundary would carry:** field-level encryption, audit logging on reads, and role-based access controls. For this scope, the structural separation is the primary signal.
+
+**Rejected alternative:** Flat `LineItem` table with all fields — simpler schema but no architectural PHI boundary; clinical data leaks into list queries and adjudication reads by default.
+
+---
+
+### Dispute Resolution — Who and How
+
+**Decision:** Disputes are resolved via a single API endpoint (`POST /disputes/{id}/resolve`) that accepts a resolution decision and notes. The caller is assumed to be an authorized insurer by convention — not enforced by the system (no auth in scope).
+
+**Why:** We have no user system, no reviewer roles, and no assignment queue. The simplest model that satisfies the requirement is a direct API call with the decision payload.
+
+**In production:** This endpoint would be gated behind an insurer role with audit logging. For this scope, authorization is documented as out of band.
 
 ---
 
