@@ -1,0 +1,56 @@
+from enum import Enum
+
+
+class ServiceType(str, Enum):
+    PREVENTIVE_CARE = "PREVENTIVE_CARE"
+    SPECIALIST_VISIT = "SPECIALIST_VISIT"
+    EMERGENCY_CARE = "EMERGENCY_CARE"
+    INPATIENT_HOSPITAL = "INPATIENT_HOSPITAL"
+    OUTPATIENT_PROCEDURE = "OUTPATIENT_PROCEDURE"
+    DIAGNOSTIC_LAB = "DIAGNOSTIC_LAB"
+    IMAGING = "IMAGING"
+    PHYSICAL_THERAPY = "PHYSICAL_THERAPY"
+    PRESCRIPTION_DRUGS = "PRESCRIPTION_DRUGS"
+    MENTAL_HEALTH = "MENTAL_HEALTH"
+
+
+class PolicyStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+class PolicyType(str, Enum):
+    INDIVIDUAL = "INDIVIDUAL"
+
+
+class ClaimStatus(str, Enum):
+    SUBMITTED = "SUBMITTED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    CLOSED = "CLOSED"
+    REOPENED = "REOPENED"
+
+
+class LineItemStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    DENIED = "DENIED"
+    DISPUTED = "DISPUTED"
+    UNDER_REVIEW = "UNDER_REVIEW"
+
+
+class DenialReason(str, Enum):
+    NOT_COVERED = "NOT_COVERED"
+    NOT_ELIGIBLE = "NOT_ELIGIBLE"
+    LIMIT_EXHAUSTED = "LIMIT_EXHAUSTED"
+
+
+class DisputeStatus(str, Enum):
+    OPEN = "OPEN"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    RESOLVED = "RESOLVED"
+
+
+class DisputeResolution(str, Enum):
+    APPROVED = "APPROVED"
+    DENIED = "DENIED"
