@@ -23,7 +23,6 @@ from app.services.claims import LineItemData, submit_claim
 from app.services.disputes import file_dispute, resolve_dispute
 
 
-pytestmark = pytest.mark.skip(reason="Requires ORM models — enable after implementation")
 
 
 def test_dispute_reopens_closed_claim(db_session, member, active_policy, standard_coverage_rules):

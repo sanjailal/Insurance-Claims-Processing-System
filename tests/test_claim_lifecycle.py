@@ -19,7 +19,6 @@ from app.models.enums import ClaimStatus, DenialReason, LineItemStatus, ServiceT
 from app.services.claims import LineItemData, submit_claim
 
 
-pytestmark = pytest.mark.skip(reason="Requires ORM models — enable after implementation")
 
 
 def test_claim_with_multiple_service_types(db_session, member, active_policy, standard_coverage_rules):

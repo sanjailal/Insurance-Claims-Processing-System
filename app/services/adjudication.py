@@ -72,6 +72,14 @@ def adjudicate_line_item(inp: AdjudicationInput) -> AdjudicationOutput:
             f"effective date ({inp.policy_effective_date}).",
         )
 
+    if inp.date_of_service >= inp.policy_renewal_date:
+        return _denial(
+            inp,
+            DenialReason.NOT_ELIGIBLE,
+            f"Date of service ({inp.date_of_service}) is on or after the policy "
+            f"renewal date ({inp.policy_renewal_date}). Submit against the renewed policy.",
+        )
+
     # ── Step 2: Coverage ──────────────────────────────────────────────────────
     if inp.coverage_rule is None:
         service_name = _service_label(inp.service_type)

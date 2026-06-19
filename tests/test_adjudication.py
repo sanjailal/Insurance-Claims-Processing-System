@@ -70,6 +70,21 @@ def test_line_item_before_policy_effective_date_is_denied():
     assert result.denial_reason == DenialReason.NOT_ELIGIBLE
 
 
+def test_line_item_on_or_after_renewal_date_is_denied():
+    """
+    A service rendered on or after the policy renewal date falls outside this
+    policy term. renewal_date is the exclusive upper bound of coverage.
+    The caller must submit against the renewed policy record.
+    """
+    result = adjudicate_line_item(make_input(
+        date_of_service=date(2025, 1, 1),      # exactly on renewal date
+        policy_renewal_date=date(2025, 1, 1),
+    ))
+
+    assert result.status == LineItemStatus.DENIED
+    assert result.denial_reason == DenialReason.NOT_ELIGIBLE
+
+
 # ── Deductible mechanics ───────────────────────────────────────────────────────
 
 def test_deductible_applied_before_coverage_percentage():
