@@ -1,4 +1,9 @@
+import uuid
+from pathlib import Path
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,7 +25,13 @@ from app.models.db import CoverageRule, Member, Policy
 from app.services.claims import LineItemData, get_claim, submit_claim
 from app.services.disputes import file_dispute, resolve_dispute
 
+_UI_HTML = Path(__file__).parent.parent / "static" / "index.html"
+
 router = APIRouter()
+
+
+def _policy_number() -> str:
+    return f"POL-{uuid.uuid4().hex[:8].upper()}"
 
 
 @router.get("/health")
@@ -28,7 +39,17 @@ def health():
     return {"status": "ok"}
 
 
+@router.get("/ui", response_class=HTMLResponse, include_in_schema=False)
+def ui():
+    return _UI_HTML.read_text()
+
+
 # ── Members ────────────────────────────────────────────────────────────────────
+
+@router.get("/members", response_model=list[MemberResponse])
+def list_members(session: Session = Depends(get_session)):
+    return session.query(Member).all()
+
 
 @router.post("/members", response_model=MemberResponse, status_code=201)
 def create_member(
@@ -52,6 +73,17 @@ def get_member(member_id: str, session: Session = Depends(get_session)):
 
 # ── Policies ───────────────────────────────────────────────────────────────────
 
+@router.get("/policies", response_model=list[PolicyResponse])
+def list_policies(
+    member_id: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
+    q = session.query(Policy)
+    if member_id:
+        q = q.filter_by(member_id=member_id)
+    return q.all()
+
+
 @router.post("/policies", response_model=PolicyResponse, status_code=201)
 def create_policy(
     req: CreatePolicyRequest,
@@ -62,7 +94,7 @@ def create_policy(
 
     policy = Policy(
         member_id=req.member_id,
-        policy_number=req.policy_number,
+        policy_number=req.policy_number or _policy_number(),
         policy_type=req.policy_type,
         effective_date=req.effective_date,
         renewal_date=req.renewal_date,

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insurance Claims Processing</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #4f46e5;
+      color: white;
+      padding: 1.25rem 2rem;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; }
+    header p  { font-size: 0.85rem; opacity: 0.8; margin-top: 0.2rem; }
+
+    main {
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      padding: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #4f46e5;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card h2 .step {
+      background: #4f46e5;
+      color: white;
+      border-radius: 50%;
+      width: 1.4rem;
+      height: 1.4rem;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    label { display: block; font-size: 0.8rem; font-weight: 500; color: #475569; margin-bottom: 0.25rem; }
+
+    input, select {
+      width: 100%;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      color: #1e293b;
+      background: white;
+      margin-bottom: 0.75rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus { border-color: #4f46e5; }
+    input[readonly] { background: #f8fafc; color: #64748b; cursor: default; }
+
+    .field { margin-bottom: 0.1rem; }
+
+    .btn {
+      display: inline-block;
+      padding: 0.5rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn-primary { background: #4f46e5; color: white; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+
+    .result {
+      margin-top: 0.9rem;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 220px;
+      overflow-y: auto;
+      display: none;
+    }
+    .result.ok  { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .result.err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+
+    .line-items { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .line-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 0.75rem;
+      background: #f8fafc;
+      position: relative;
+    }
+    .line-item .remove-li {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .line-item .remove-li:hover { color: #dc2626; }
+    .line-item label { margin-bottom: 0.2rem; }
+    .line-item input, .line-item select { margin-bottom: 0.5rem; }
+    .line-item input:last-child, .line-item select:last-child { margin-bottom: 0; }
+
+    .autofill-badge {
+      font-size: 0.7rem;
+      background: #ede9fe;
+      color: #5b21b6;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 0.4rem;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Insurance Claims Processing System</h1>
+  <p>Complete the steps in order — IDs auto-fill as you go.</p>
+</header>
+
+<main>
+
+  <!-- Row 1: Member + Policy -->
+  <div class="row">
+
+    <!-- Step 1: Create Member -->
+    <div class="card">
+      <h2><span class="step">1</span> Create Member</h2>
+      <form id="member-form">
+        <div class="field">
+          <label>Full Name</label>
+          <input name="name" placeholder="Alex Johnson" required>
+        </div>
+        <div class="field">
+          <label>Date of Birth</label>
+          <input name="date_of_birth" type="date" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Create Member</button>
+      </form>
+      <pre id="member-result" class="result"></pre>
+    </div>
+
+    <!-- Step 2: Create Policy -->
+    <div class="card">
+      <h2><span class="step">2</span> Create Policy</h2>
+      <form id="policy-form">
+        <div class="field">
+          <label>Member ID <span class="autofill-badge">auto-filled</span></label>
+          <input name="member_id" data-auto="memberId" placeholder="Fill in step 1 first" required>
+        </div>
+        <div class="field">
+          <label>Effective Date</label>
+          <input name="effective_date" type="date" required>
+        </div>
+        <div class="field">
+          <label>Renewal Date</label>
+          <input name="renewal_date" type="date" required>
+        </div>
+        <div class="field">
+          <label>Annual Deductible ($)</label>
+          <input name="annual_deductible" placeholder="500.00" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Create Policy</button>
+      </form>
+      <pre id="policy-result" class="result"></pre>
+    </div>
+  </div>
+
+  <!-- Step 3: Coverage Rules -->
+  <div class="card">
+    <h2><span class="step">3</span> Add Coverage Rules</h2>
+    <form id="rule-form" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:.75rem;align-items:end;">
+      <div class="field">
+        <label>Policy ID <span class="autofill-badge">auto-filled</span></label>
+        <input name="policy_id" data-auto="policyId" placeholder="Fill in step 2 first" required style="margin-bottom:0">
+      </div>
+      <div class="field">
+        <label>Service Type</label>
+        <select name="service_type" style="margin-bottom:0">
+          <option value="PHYSICAL_THERAPY">Physical Therapy</option>
+          <option value="SPECIALIST_VISIT">Specialist Visit</option>
+          <option value="PREVENTIVE_CARE">Preventive Care</option>
+          <option value="EMERGENCY_CARE">Emergency Care</option>
+          <option value="INPATIENT_HOSPITAL">Inpatient Hospital</option>
+          <option value="OUTPATIENT_PROCEDURE">Outpatient Procedure</option>
+          <option value="DIAGNOSTIC_LAB">Diagnostic Lab</option>
+          <option value="IMAGING">Imaging</option>
+          <option value="PRESCRIPTION_DRUGS">Prescription Drugs</option>
+          <option value="MENTAL_HEALTH">Mental Health</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Annual Limit ($)</label>
+        <input name="annual_limit" placeholder="1000.00" required style="margin-bottom:0">
+      </div>
+      <div class="field">
+        <label>Coverage %</label>
+        <input name="coverage_percent" type="number" min="0" max="100" placeholder="80" required style="margin-bottom:0">
+      </div>
+      <button class="btn btn-primary" type="submit" style="white-space:nowrap">Add Rule</button>
+    </form>
+    <pre id="rule-result" class="result"></pre>
+  </div>
+
+  <!-- Step 4: Submit Claim -->
+  <div class="card">
+    <h2><span class="step">4</span> Submit Claim</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+      <div class="field">
+        <label>Member ID <span class="autofill-badge">auto-filled</span></label>
+        <input id="claim-member-id" data-auto="memberId" placeholder="Fill in step 1 first" required>
+      </div>
+      <div class="field">
+        <label>Policy ID <span class="autofill-badge">auto-filled</span></label>
+        <input id="claim-policy-id" data-auto="policyId" placeholder="Fill in step 2 first" required>
+      </div>
+    </div>
+
+    <div class="line-items" id="line-items-container">
+      <!-- line items injected here -->
+    </div>
+
+    <div style="display:flex;gap:.75rem;margin-top:.25rem">
+      <button class="btn btn-secondary btn-sm" type="button" id="add-line-item">+ Add Line Item</button>
+      <button class="btn btn-primary" type="button" id="submit-claim-btn">Submit Claim</button>
+    </div>
+    <pre id="claim-result" class="result"></pre>
+  </div>
+
+  <!-- Row 2: File Dispute + Resolve Dispute -->
+  <div class="row">
+
+    <!-- Step 5: File Dispute -->
+    <div class="card">
+      <h2><span class="step">5</span> File Dispute</h2>
+      <p style="font-size:.8rem;color:#64748b;margin-bottom:.9rem">
+        Copy a <code>line_items[].id</code> from the claim result above.
+      </p>
+      <form id="dispute-form">
+        <div class="field">
+          <label>Line Item ID</label>
+          <input name="line_item_id" placeholder="Paste from claim result" required>
+        </div>
+        <div class="field">
+          <label>Member ID <span class="autofill-badge">auto-filled</span></label>
+          <input name="member_id" data-auto="memberId" placeholder="Fill in step 1 first" required>
+        </div>
+        <div class="field">
+          <label>Reason</label>
+          <input name="reason" placeholder="This service should be covered." required>
+        </div>
+        <button class="btn btn-primary" type="submit">File Dispute</button>
+      </form>
+      <pre id="dispute-result" class="result"></pre>
+    </div>
+
+    <!-- Step 6: Resolve Dispute -->
+    <div class="card">
+      <h2><span class="step">6</span> Resolve Dispute</h2>
+      <p style="font-size:.8rem;color:#64748b;margin-bottom:.9rem">
+        Copy the <code>id</code> from the dispute result on the left.
+      </p>
+      <form id="resolve-form">
+        <div class="field">
+          <label>Dispute ID</label>
+          <input name="dispute_id" data-auto="disputeId" placeholder="Fill in step 5 first" required>
+        </div>
+        <div class="field">
+          <label>Resolution</label>
+          <select name="resolution">
+            <option value="APPROVED">Approved</option>
+            <option value="DENIED">Denied</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <input name="notes" placeholder="Coverage confirmed by underwriting." required>
+        </div>
+        <button class="btn btn-primary" type="submit">Resolve Dispute</button>
+      </form>
+      <pre id="resolve-result" class="result"></pre>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────────────
+  const state = { memberId: null, policyId: null, disputeId: null };
+
+  function autofill(key, value) {
+    state[key] = value;
+    document.querySelectorAll(`[data-auto="${key}"]`).forEach(el => {
+      el.value = value;
+    });
+  }
+
+  // ── API helper ───────────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data;
+  }
+
+  function showResult(id, data, ok) {
+    const el = document.getElementById(id);
+    el.textContent = JSON.stringify(data, null, 2);
+    el.className = `result ${ok ? 'ok' : 'err'}`;
+    el.style.display = 'block';
+  }
+
+  // ── Line items ───────────────────────────────────────────────────────────────
+  const SERVICE_TYPES = [
+    ['PHYSICAL_THERAPY',    'Physical Therapy'],
+    ['SPECIALIST_VISIT',    'Specialist Visit'],
+    ['PREVENTIVE_CARE',     'Preventive Care'],
+    ['EMERGENCY_CARE',      'Emergency Care'],
+    ['INPATIENT_HOSPITAL',  'Inpatient Hospital'],
+    ['OUTPATIENT_PROCEDURE','Outpatient Procedure'],
+    ['DIAGNOSTIC_LAB',      'Diagnostic Lab'],
+    ['IMAGING',             'Imaging'],
+    ['PRESCRIPTION_DRUGS',  'Prescription Drugs'],
+    ['MENTAL_HEALTH',       'Mental Health'],
+  ];
+
+  function serviceTypeOptions(selected) {
+    return SERVICE_TYPES.map(([v, l]) =>
+      `<option value="${v}"${v === selected ? ' selected' : ''}>${l}</option>`
+    ).join('');
+  }
+
+  function addLineItem(defaults = {}) {
+    const container = document.getElementById('line-items-container');
+    const div = document.createElement('div');
+    div.className = 'line-item';
+    div.innerHTML = `
+      <button class="remove-li" type="button" title="Remove">×</button>
+      <label>Service Type</label>
+      <select class="li-service-type">${serviceTypeOptions(defaults.service_type || 'PHYSICAL_THERAPY')}</select>
+      <label>Date of Service</label>
+      <input class="li-date" type="date" value="${defaults.date_of_service || ''}">
+      <label>Billed Amount ($)</label>
+      <input class="li-amount" placeholder="200.00" value="${defaults.billed_amount || ''}">
+    `;
+    div.querySelector('.remove-li').onclick = () => {
+      if (container.children.length > 1) div.remove();
+    };
+    container.appendChild(div);
+  }
+
+  // Start with one line item
+  addLineItem({ date_of_service: new Date().toISOString().slice(0, 10) });
+
+  document.getElementById('add-line-item').onclick = () => addLineItem();
+
+  // ── Form handlers ────────────────────────────────────────────────────────────
+
+  document.getElementById('member-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const member = await api('POST', '/members', {
+        name: fd.get('name'),
+        date_of_birth: fd.get('date_of_birth'),
+      });
+      autofill('memberId', member.id);
+      showResult('member-result', member, true);
+    } catch (err) {
+      showResult('member-result', err, false);
+    }
+  };
+
+  document.getElementById('policy-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const policy = await api('POST', '/policies', {
+        member_id:         fd.get('member_id'),
+        effective_date:    fd.get('effective_date'),
+        renewal_date:      fd.get('renewal_date'),
+        annual_deductible: fd.get('annual_deductible'),
+      });
+      autofill('policyId', policy.id);
+      showResult('policy-result', policy, true);
+    } catch (err) {
+      showResult('policy-result', err, false);
+    }
+  };
+
+  document.getElementById('rule-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const policyId = fd.get('policy_id');
+    try {
+      const rule = await api('POST', `/policies/${policyId}/coverage-rules`, {
+        service_type:     fd.get('service_type'),
+        annual_limit:     fd.get('annual_limit'),
+        coverage_percent: parseInt(fd.get('coverage_percent'), 10),
+      });
+      showResult('rule-result', rule, true);
+    } catch (err) {
+      showResult('rule-result', err, false);
+    }
+  };
+
+  document.getElementById('submit-claim-btn').onclick = async () => {
+    const memberId = document.getElementById('claim-member-id').value;
+    const policyId = document.getElementById('claim-policy-id').value;
+    if (!memberId || !policyId) {
+      alert('Complete steps 1 and 2 first.');
+      return;
+    }
+    const lineItemEls = document.querySelectorAll('.line-item');
+    const line_items = Array.from(lineItemEls).map(el => ({
+      service_type:    el.querySelector('.li-service-type').value,
+      date_of_service: el.querySelector('.li-date').value,
+      billed_amount:   el.querySelector('.li-amount').value,
+    }));
+    try {
+      const claim = await api('POST', '/claims', { member_id: memberId, policy_id: policyId, line_items });
+      showResult('claim-result', claim, true);
+    } catch (err) {
+      showResult('claim-result', err, false);
+    }
+  };
+
+  document.getElementById('dispute-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const lineItemId = fd.get('line_item_id');
+    try {
+      const dispute = await api('POST', `/line-items/${lineItemId}/disputes`, {
+        member_id: fd.get('member_id'),
+        reason:    fd.get('reason'),
+      });
+      autofill('disputeId', dispute.id);
+      showResult('dispute-result', dispute, true);
+    } catch (err) {
+      showResult('dispute-result', err, false);
+    }
+  };
+
+  document.getElementById('resolve-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const disputeId = fd.get('dispute_id');
+    try {
+      const resolved = await api('POST', `/disputes/${disputeId}/resolve`, {
+        resolution: fd.get('resolution'),
+        notes:      fd.get('notes'),
+      });
+      showResult('resolve-result', resolved, true);
+    } catch (err) {
+      showResult('resolve-result', err, false);
+    }
+  };
+</script>
+</body>
+</html>

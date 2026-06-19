@@ -27,6 +27,10 @@ from app.models.enums import (
 # ── Member ─────────────────────────────────────────────────────────────────────
 
 class CreateMemberRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"name": "Alex Johnson", "date_of_birth": "1990-03-15"}}
+    )
+
     name: str
     date_of_birth: date
 
@@ -42,8 +46,22 @@ class MemberResponse(BaseModel):
 # ── Policy ─────────────────────────────────────────────────────────────────────
 
 class CreatePolicyRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "member_id": "<id from POST /members>",
+                "effective_date": "2024-01-01",
+                "renewal_date": "2025-01-01",
+                "annual_deductible": "500.00",
+            }
+        }
+    )
+
     member_id: str
-    policy_number: str
+    policy_number: Optional[str] = Field(
+        default=None,
+        description="Auto-generated (e.g. POL-3A2F1B9C) if not provided.",
+    )
     policy_type: PolicyType = PolicyType.INDIVIDUAL
     effective_date: date
     renewal_date: date
@@ -73,6 +91,16 @@ class PolicyResponse(BaseModel):
 # ── Coverage rule ──────────────────────────────────────────────────────────────
 
 class AddCoverageRuleRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "service_type": "PHYSICAL_THERAPY",
+                "annual_limit": "1000.00",
+                "coverage_percent": 80,
+            }
+        }
+    )
+
     service_type: ServiceType
     annual_limit: Decimal = Field(gt=Decimal("0.00"))
     coverage_percent: int = Field(ge=0, le=100)
@@ -101,17 +129,48 @@ class LineItemRequest(BaseModel):
 
 
 class SubmitClaimRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "member_id": "<id from POST /members>",
+                "policy_id": "<id from POST /policies>",
+                "line_items": [
+                    {
+                        "service_type": "PHYSICAL_THERAPY",
+                        "date_of_service": "2024-06-01",
+                        "billed_amount": "200.00",
+                    }
+                ],
+            }
+        }
+    )
+
     member_id: str
     policy_id: str
     line_items: List[LineItemRequest]
 
 
 class FileDisputeRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "member_id": "<id from POST /members>",
+                "reason": "This service is covered under my plan.",
+            }
+        }
+    )
+
     member_id: str
     reason: str
 
 
 class ResolveDisputeRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"resolution": "APPROVED", "notes": "Coverage confirmed by underwriting."}
+        }
+    )
+
     resolution: DisputeResolution
     notes: str
 
