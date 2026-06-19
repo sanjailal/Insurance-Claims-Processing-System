@@ -216,4 +216,58 @@ PENDING → APPROVED
 
 ---
 
+## Technical Stack
+
+### Language — Python 3.11+
+
+**Decision:** Python over Java (primary experience) or TypeScript.
+
+**Why:** Python's readability means the adjudication engine reads like the domain documentation — business rules are visible, not buried in framework boilerplate. Java/Spring Boot was ruled out: excessive scaffolding for a 48-hour submission and setup friction for reviewers cloning the repo. TypeScript was a valid alternative but adds ceremony (type imports, interface definitions, async chains) that obscures domain logic without proportional benefit.
+
+---
+
+### Framework — FastAPI
+
+**Decision:** FastAPI for the REST API layer.
+
+**Why:** Auto-generates Swagger UI at `/docs` and ReDoc at `/redoc` — zero extra work for a demo-able interface. Pydantic validation aligns with our strict enum approach on service types and state transitions. Minimal boilerplate keeps domain logic in focus.
+
+**Interface:** Swagger UI at `/docs` serves as the primary interface for demonstrating claim flows. A web UI was considered but deprioritised — it adds frontend complexity that is not part of the evaluation criteria.
+
+---
+
+### ORM — SQLAlchemy (sync)
+
+**Decision:** SQLAlchemy with synchronous sessions.
+
+**Why:** Mature, explicit, maps cleanly to our 10-entity model. Sync mode is simpler to reason about for a domain-heavy system — async SQLAlchemy adds complexity that isn't needed at this scale.
+
+---
+
+### Migrations — Alembic
+
+**Decision:** Alembic for schema migrations.
+
+**Why:** Standard SQLAlchemy migration tool. Provides a clean upgrade path and a readable migration history, which matters for a submission where commit history is reviewed.
+
+---
+
+### Database — SQLite
+
+**Decision:** SQLite as the persistence layer.
+
+**Why:** Zero infrastructure — reviewers clone and run with no Docker, no database server, no environment variables. Fully sufficient for the adjudication workload (no concurrency requirements, no scale constraints).
+
+**One deliberate constraint — financial decimal precision:** SQLite's `REAL` type is floating-point and cannot represent money exactly. All monetary fields (`billedAmount`, `approvedAmount`, `deductibleApplied`, `limitCapApplied`, etc.) use SQLAlchemy's `Numeric(precision=10, scale=2, asdecimal=True)`, which SQLite stores as text and returns as Python `Decimal` objects. Exact arithmetic, no floating-point drift.
+
+---
+
+### Testing — pytest
+
+**Decision:** pytest with descriptive test names encoding domain rules.
+
+**Why:** Test names like `test_claim_denied_when_annual_limit_exhausted` are readable as domain specifications — they communicate intent without reading the test body. Tests are written against the adjudication engine directly, independent of the HTTP layer, so they verify business rules rather than API plumbing.
+
+---
+
 *This document will be updated as implementation decisions are made.*
