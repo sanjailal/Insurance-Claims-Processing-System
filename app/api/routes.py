@@ -1,14 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    AddCoverageRuleRequest,
     ClaimResponse,
+    CreateMemberRequest,
+    CreatePolicyRequest,
+    CoverageRuleResponse,
     DisputeResponse,
     FileDisputeRequest,
+    MemberResponse,
+    PolicyResponse,
     ResolveDisputeRequest,
     SubmitClaimRequest,
 )
 from app.database import get_session
+from app.models.db import CoverageRule, Member, Policy
 from app.services.claims import LineItemData, get_claim, submit_claim
 from app.services.disputes import file_dispute, resolve_dispute
 
@@ -18,6 +26,114 @@ router = APIRouter()
 @router.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ── Members ────────────────────────────────────────────────────────────────────
+
+@router.post("/members", response_model=MemberResponse, status_code=201)
+def create_member(
+    req: CreateMemberRequest,
+    session: Session = Depends(get_session),
+):
+    member = Member(name=req.name, date_of_birth=req.date_of_birth)
+    session.add(member)
+    session.commit()
+    session.refresh(member)
+    return member
+
+
+@router.get("/members/{member_id}", response_model=MemberResponse)
+def get_member(member_id: str, session: Session = Depends(get_session)):
+    member = session.get(Member, member_id)
+    if member is None:
+        raise HTTPException(status_code=404, detail=f"Member {member_id!r} not found.")
+    return member
+
+
+# ── Policies ───────────────────────────────────────────────────────────────────
+
+@router.post("/policies", response_model=PolicyResponse, status_code=201)
+def create_policy(
+    req: CreatePolicyRequest,
+    session: Session = Depends(get_session),
+):
+    if session.get(Member, req.member_id) is None:
+        raise HTTPException(status_code=404, detail=f"Member {req.member_id!r} not found.")
+
+    policy = Policy(
+        member_id=req.member_id,
+        policy_number=req.policy_number,
+        policy_type=req.policy_type,
+        effective_date=req.effective_date,
+        renewal_date=req.renewal_date,
+        annual_deductible=req.annual_deductible,
+        status=req.status,
+    )
+    session.add(policy)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Policy number {req.policy_number!r} already exists.",
+        )
+    session.refresh(policy)
+    return policy
+
+
+@router.get("/policies/{policy_id}", response_model=PolicyResponse)
+def get_policy(policy_id: str, session: Session = Depends(get_session)):
+    policy = session.get(Policy, policy_id)
+    if policy is None:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id!r} not found.")
+    return policy
+
+
+# ── Coverage rules ─────────────────────────────────────────────────────────────
+
+@router.post(
+    "/policies/{policy_id}/coverage-rules",
+    response_model=CoverageRuleResponse,
+    status_code=201,
+)
+def add_coverage_rule(
+    policy_id: str,
+    req: AddCoverageRuleRequest,
+    session: Session = Depends(get_session),
+):
+    if session.get(Policy, policy_id) is None:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id!r} not found.")
+
+    rule = CoverageRule(
+        policy_id=policy_id,
+        service_type=req.service_type,
+        annual_limit=req.annual_limit,
+        coverage_percent=req.coverage_percent,
+        is_active=True,
+    )
+    session.add(rule)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"A coverage rule for {req.service_type.value} already exists on this policy.",
+        )
+    session.refresh(rule)
+    return rule
+
+
+@router.get(
+    "/policies/{policy_id}/coverage-rules",
+    response_model=list[CoverageRuleResponse],
+)
+def list_coverage_rules(policy_id: str, session: Session = Depends(get_session)):
+    if session.get(Policy, policy_id) is None:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id!r} not found.")
+    rules = session.query(CoverageRule).filter_by(policy_id=policy_id).all()
+    return rules
 
 
 @router.post("/claims", response_model=ClaimResponse, status_code=201)
